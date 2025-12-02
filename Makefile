@@ -281,10 +281,21 @@ port-forward-services:
 	done
 
 # ---------------------------------------------------------------------------------
-# ------------------------------------ helpers ------------------------------------
+# ----------------------------------- MONITORING ----------------------------------
 # ---------------------------------------------------------------------------------
 monitor-db:
 	@bash kubernetes/monitoring/db.sh
 
 monitor-pgbouncer:
 	@bash kubernetes/monitoring/bouncer.sh
+
+# ---------------------------------------------------------------------------------
+# ------------------------------------ TESTING ------------------------------------
+# ---------------------------------------------------------------------------------
+test-redis:
+	@chmod +x kubernetes/tests/test-redis.sh
+	@bash kubernetes/tests/test-redis.sh
+
+test-db:
+	@chmod +x kubernetes/tests/test-db.sh
+	@bash kubernetes/tests/test-db.sh

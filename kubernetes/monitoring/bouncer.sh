@@ -1,6 +1,7 @@
 #!/bin/bash
 
-echo "--- Live PgBouncer connection monitor (langflow_db) ---"
+echo "--- 🔵 Live PgBouncer Pool Monitor (Press Ctrl+C to stop) ---"
+
 PSQL_POD=$(kubectl get pod -l app=postgres -o jsonpath='{.items[0].metadata.name}')
 
 if [ -z "$PSQL_POD" ]; then
@@ -8,16 +9,19 @@ if [ -z "$PSQL_POD" ]; then
     exit 1
 fi
 
-echo "Monitoring PgBouncer *from* pod: $PSQL_POD (Press Ctrl+C to stop)"
-echo "--- (cl_active = Clients | sv_active = Servers) ---"
+echo "Connecting to PgBouncer via pod: $PSQL_POD"
+echo "Target: pgbouncer-service:6432"
+echo "------------------------------------------------------------------------------------------------"
+echo " DATABASE      | CL_ACTIVE | CL_WAITING | SV_ACTIVE | SV_IDLE | MAXWAIT(s)"
+echo "------------------------------------------------------------------------------------------------"
 
+kubectl exec -it $PSQL_POD -- bash -c "
+    export PGPASSWORD=\"\$POSTGRES_PASSWORD\";
+    while true; do
+        psql -U \"\$POSTGRES_USER\" -d 'pgbouncer' -h 'pgbouncer' -p 6432 -tA -c 'SHOW POOLS;' 2>/dev/null \
+        | awk -F'|' '{ printf \" %-13s | %-9s | %-10s | %-9s | %-7s | %s\n\", \$1, \$3, \$4, \$5, \$7, \$10 }'
 
-kubectl exec -it $PSQL_POD -- bash -lc "
-    export PGPASSWORD='password';
-    while true;
-    do
-        psql -U 'postgres_user' -d 'pgbouncer' -h 'pgbouncer' -p 6432 -tA -c 'SHOW STATS;' 2>/dev/null \
-        | grep --line-buffered 'langflow_db' | awk -F'|' '{print \"[PGBOUNCER] cl_active=\" \$3 \" | cl_waiting=\" \$4 \" | sv_active=\" \$5 \" | sv_idle=\" \$7 \" | maxwait(ms)=\" \$10; fflush()}'
+        echo '------------------------------------------------------------------------------------------------'
         sleep 2
     done
 "
