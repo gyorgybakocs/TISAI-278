@@ -70,7 +70,7 @@ base-build:
 	@echo "----------------- Verifying images in local registry -------------------"
 	@curl -s http://localhost:5000/v2/_catalog
 	@echo "----------------- Killing port-forward process -------------------"
-	@pkill -f "kubectl port-forward.*5000" || true
+	@fuser -k 5000/tcp > /dev/null 2>&1 || true
 
 # ---------------------------------------------------------------------------------
 # ------------------------------ Minikube Management ------------------------------
@@ -97,9 +97,6 @@ mk-setup:
 # ---------------------------------------------------------------------------------
 # -------------------------------- build Minikube ---------------------------------
 # ---------------------------------------------------------------------------------
-
-mk-build: mk-stop mk-delete mk-up mk-setup pre-build apply-config apply-instances-config aws-login base-build
-
 pre-build:
 	@echo "----------------- Auto-configuring resource limits -------------------"
 	@CPU_CORES=$$(nproc); \
@@ -152,21 +149,6 @@ apply-config:
 	@echo "----------------- Applying Global Configs & Secrets -------------------"
 	kubectl apply -f kubernetes/global-config.yaml
 	kubectl apply -f kubernetes/global-secret.yaml
-
-apply-instances-config:
-	@echo "----------------- Applying Postgres Persistent Volume Claim -------------------"
-	kubectl apply -f kubernetes/postgres/postgres-pvc.yaml
-	@echo "----------------- Applying Postgres ConfigMaps and Secrets -------------------"
-	kubectl apply -f kubernetes/postgres/postgres-init-cm.yaml
-	kubectl apply -f kubernetes/postgres/postgres-config.yaml
-	kubectl apply -f kubernetes/postgres/postgres-secret.yaml
-	@echo "----------------- Applying PgBouncer ConfigMaps -------------------"
-	kubectl apply -f kubernetes/pgbouncer/pgbouncer-config.yaml
-	@echo "----------------- Applying Redis Persistent Volume Claim -------------------"
-	kubectl apply -f kubernetes/redis/redis-pvc.yaml
-	@echo "----------------- Applying Redis ConfigMaps and Secrets -------------------"
-	kubectl apply -f kubernetes/redis/redis-config.yaml
-	kubectl apply -f kubernetes/redis/redis-secret.yaml
 
 # ---------------------------------------------------------------------------------
 # ----------------------------------- BUILD k8s -----------------------------------
@@ -299,3 +281,53 @@ test-redis:
 test-db:
 	@chmod +x kubernetes/tests/test-db.sh
 	@bash kubernetes/tests/test-db.sh
+
+PG_PASS ?= password
+REDIS_PASS ?= redissecret
+AWS_KEY_ID ?= AKIAX7SUEXAT7OWTXRLH
+AWS_SECRET_KEY ?= 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
+
+# ---------------------------------------------------------------------------------
+# ---------------------------------- BOOTSTRAP ------------------------------------
+# ---------------------------------------------------------------------------------
+
+apply-build-configs:
+	@echo "----------------- Applying Build Configs -------------------"
+	kubectl apply -f kubernetes/postgres/postgres-config.yaml
+	kubectl apply -f kubernetes/postgres/postgres-init-cm.yaml
+	kubectl apply -f kubernetes/pgbouncer/pgbouncer-config.yaml
+	kubectl apply -f kubernetes/redis/redis-config.yaml
+
+bootstrap: mk-delete mk-up mk-setup pre-build apply-config apply-build-configs aws-login base-build build-k8s helm-install
+	@echo "==========================================================="
+	@echo "🎉 System bootstrapped successfully via Helm!"
+	@echo "   Access services via: localhost:6433 (PgBouncer), localhost:5433 (Postgres), localhost:6380 (Redis)"
+	@echo "==========================================================="
+
+# ---------------------------------------------------------------------------------
+# ----------------------------------- HELM DEPLOY ---------------------------------
+# ---------------------------------------------------------------------------------
+helm-install:
+	@echo "----------------- Deploying TIS Stack with Helm -------------------"
+	@MINIKUBE_IP=$$(minikube ip); \
+	echo "--> Using Registry at: $$MINIKUBE_IP:30500"; \
+	helm upgrade --install tis-stack ./charts/tis-stack \
+		--namespace default \
+		--set global.registry="$$MINIKUBE_IP:30500" \
+		--set postgres.auth.password="$(PG_PASS)" \
+		--set redis.auth.password="$(REDIS_PASS)" \
+		--set global.aws.accessKeyId="$(AWS_KEY_ID)" \
+		--set global.aws.secretAccessKey="$(AWS_SECRET_KEY)" \
+		--wait
+
+helm-uninstall:
+	@echo "----------------- Removing TIS Stack -------------------"
+	helm uninstall tis-stack || true
+
+helm-template:
+	@echo "----------------- Debugging Helm Templates -------------------"
+	helm template tis-stack ./charts/tis-stack --debug
+
+up-helm: down-k8s helm-install port-forward-services
+	@echo "----------------- System is up via Helm -------------------"
+	kubectl get pods

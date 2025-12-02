@@ -1,0 +1,43 @@
+global:
+  registry: "registry.default.svc.cluster.local:5000"
+  imagePullPolicy: Always
+  aws:
+    accessKeyId: ""
+    secretAccessKey: ""
+
+postgres:
+  enabled: true
+  image:
+    repository: "postgres/postgres:built"
+  service:
+    port: 5432
+  auth:
+    username: "postgres_user"
+    password: ""
+    database: "langflow_db"
+  persistence:
+    size: 1Gi
+  config:
+    max_connections: 150
+
+pgbouncer:
+  enabled: true
+  image:
+    repository: "pgbouncer/pgbouncer:built"
+  service:
+    port: 6432
+  pool:
+    mode: session
+    max_client_conn: 1000
+    default_pool_size: 20
+
+redis:
+  enabled: true
+  image:
+    repository: "redis/redis:built"
+  service:
+    port: 6379
+  auth:
+    password: ""
+  persistence:
+    size: 1Gi

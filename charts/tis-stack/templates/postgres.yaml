@@ -1,0 +1,61 @@
+{{- if .Values.postgres.enabled -}}
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: postgres-pvc
+spec:
+  accessModes:
+    - ReadWriteOnce
+  resources:
+    requests:
+      storage: {{ .Values.postgres.persistence.size }}
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: postgres-db
+spec:
+  selector:
+    app: postgres
+  ports:
+    - protocol: TCP
+      port: {{ .Values.postgres.service.port }}
+      targetPort: {{ .Values.postgres.service.port }}
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: postgres
+spec:
+  selector:
+    matchLabels:
+      app: postgres
+  template:
+    metadata:
+      labels:
+        app: postgres
+    spec:
+      containers:
+        - name: postgres
+          image: "{{ .Values.global.registry }}/{{ .Values.postgres.image.repository }}"
+          imagePullPolicy: {{ .Values.global.imagePullPolicy }}
+          ports:
+            - containerPort: {{ .Values.postgres.service.port }}
+          env:
+            - name: POSTGRES_USER
+              value: { { .Values.postgres.auth.username | quote } }
+            - name: POSTGRES_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: tis-app-secrets
+                  key: postgres-password
+            - name: POSTGRES_DB
+              value: { { .Values.postgres.auth.database | quote } }
+          volumeMounts:
+            - name: postgres-data
+              mountPath: /var/lib/postgresql/data
+      volumes:
+        - name: postgres-data
+          persistentVolumeClaim:
+            claimName: postgres-pvc
+  {{- end }}

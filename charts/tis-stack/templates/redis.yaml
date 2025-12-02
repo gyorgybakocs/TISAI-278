@@ -1,0 +1,59 @@
+{{- if .Values.redis.enabled -}}
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: redis-pvc
+spec:
+  accessModes:
+    - ReadWriteOnce
+  resources:
+    requests:
+      storage: {{ .Values.redis.persistence.size }}
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: redis
+spec:
+  selector:
+    app: redis
+  ports:
+    - protocol: TCP
+      port: {{ .Values.redis.service.port }}
+      targetPort: {{ .Values.redis.service.port }}
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: redis
+spec:
+  selector:
+    matchLabels:
+      app: redis
+  template:
+    metadata:
+      labels:
+        app: redis
+    spec:
+      containers:
+        - name: redis
+          image: "{{ .Values.global.registry }}/{{ .Values.redis.image.repository }}"
+          imagePullPolicy: {{ .Values.global.imagePullPolicy }}
+          command: ["redis-server"]
+          args: ["--requirepass", "$(REDIS_PASSWORD)", "--appendonly", "yes"]
+          env:
+            - name: REDIS_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: tis-app-secrets
+                  key: redis-password
+          ports:
+            - containerPort: {{ .Values.redis.service.port }}
+          volumeMounts:
+            - name: redis-data
+              mountPath: /data
+      volumes:
+        - name: redis-data
+          persistentVolumeClaim:
+            claimName: redis-pvc
+  {{- end }}
