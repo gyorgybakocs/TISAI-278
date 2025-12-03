@@ -1,0 +1,28 @@
+{{- if and .Values.redis.enabled .Values.redis.autoscaling.enabled }}
+apiVersion: autoscaling/v2
+kind: HorizontalPodAutoscaler
+metadata:
+  name: redis-hpa
+spec:
+  scaleTargetRef:
+    apiVersion: apps/v1
+    kind: StatefulSet
+    name: redis
+  minReplicas: {{ .Values.redis.autoscaling.minReplicas }}
+  maxReplicas: {{ .Values.redis.autoscaling.maxReplicas }}
+  metrics:
+    - type: Resource
+      resource:
+        name: cpu
+        target:
+          type: Utilization
+          averageUtilization: {{ .Values.redis.autoscaling.targetCPUUtilizationPercentage }}
+    {{- if .Values.redis.autoscaling.targetMemoryUtilizationPercentage }}
+    - type: Resource
+      resource:
+        name: memory
+        target:
+          type: Utilization
+          averageUtilization: {{ .Values.redis.autoscaling.targetMemoryUtilizationPercentage }}
+    {{- end }}
+{{- end }}

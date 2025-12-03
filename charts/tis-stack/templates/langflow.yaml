@@ -1,0 +1,198 @@
+{{- if .Values.langflow.enabled -}}
+# -----------------------------------------------------------------------------
+# Persistent Volume Claims (Storage)
+# -----------------------------------------------------------------------------
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: langflow-flows-pvc
+spec:
+  accessModes:
+    - ReadWriteOnce
+  resources:
+    requests:
+      storage: {{ .Values.langflow.persistence.flows.size }}
+---
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: langflow-logs-pvc
+spec:
+  accessModes:
+    - ReadWriteOnce
+  resources:
+    requests:
+      storage: {{ .Values.langflow.persistence.logs.size }}
+
+---
+# -----------------------------------------------------------------------------
+# Service (Network)
+# -----------------------------------------------------------------------------
+apiVersion: v1
+kind: Service
+metadata:
+  name: langflow
+spec:
+  type: {{ .Values.langflow.service.type }}
+  selector:
+    app: langflow
+  ports:
+    - protocol: TCP
+      port: {{ .Values.langflow.service.port }}
+      targetPort: {{ .Values.langflow.service.targetPort }}
+      {{- if and (eq .Values.langflow.service.type "NodePort") .Values.langflow.service.nodePort }}
+      nodePort: {{ .Values.langflow.service.nodePort }}
+      {{- end }}
+
+---
+# -----------------------------------------------------------------------------
+# Deployment (Application)
+# -----------------------------------------------------------------------------
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: langflow
+  labels:
+    app: langflow
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: langflow
+  template:
+    metadata:
+      labels:
+        app: langflow
+    spec:
+      containers:
+        - name: langflow
+          # Dynamic image path constructed from global registry and local settings
+          image: "{{ .Values.global.registry }}/{{ .Values.langflow.image.repository }}:{{ .Values.langflow.image.tag }}"
+          imagePullPolicy: {{ .Values.langflow.image.pullPolicy }}
+
+          # Load Environment Variables from ConfigMap
+          envFrom:
+            - configMapRef:
+                name: langflow-config
+
+          # Specific Env Vars (Secrets and Dynamic DB Connection)
+          env:
+            # --- Secrets (Loaded from the shared tis-app-secrets) ---
+            - name: LANGFLOW_SECRET_KEY
+              valueFrom:
+                secretKeyRef:
+                  name: tis-app-secrets
+                  key: langflow-secret-key
+            - name: LANGFLOW_SUPERUSER_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: tis-app-secrets
+                  key: langflow-superuser-password
+            - name: LANGFLOW_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: tis-app-secrets
+                  key: langflow-password
+
+            # --- Database Connection Construction ---
+            - name: POSTGRES_DB_NAME
+              valueFrom:
+                configMapKeyRef:
+                  name: langflow-config
+                  key: POSTGRES_DB_NAME
+            - name: POSTGRES_USER
+              valueFrom:
+                configMapKeyRef:
+                  name: postgres-config
+                  key: POSTGRES_USER
+            - name: POSTGRES_HOST
+              valueFrom:
+                configMapKeyRef:
+                  name: postgres-config
+                  key: POSTGRES_HOST
+            - name: POSTGRES_PORT
+              valueFrom:
+                configMapKeyRef:
+                  name: postgres-config
+                  key: POSTGRES_PORT
+            - name: POSTGRES_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: tis-app-secrets
+                  key: postgres-password
+
+            # Construct the final DB URL
+            - name: LANGFLOW_DATABASE_URL
+              value: "postgresql://$(POSTGRES_USER):$(POSTGRES_PASSWORD)@$(POSTGRES_HOST):$(POSTGRES_PORT)/$(POSTGRES_DB_NAME)"
+
+          # Startup Command (Gunicorn with Uvicorn workers)
+          command: [ "/bin/sh", "-lc" ]
+          args:
+            - >
+              exec /app/.venv/bin/python -m gunicorn "langflow.main:create_app()"
+              -k uvicorn.workers.UvicornWorker
+              --workers ${WEB_CONCURRENCY:-1}
+              --threads ${WEB_THREADS:-1}
+              --bind 0.0.0.0:${LANGFLOW_PORT:-7860}
+              --timeout ${GUNICORN_TIMEOUT:-120}
+              --keep-alive ${GUNICORN_KEEPALIVE:-5}
+              --graceful-timeout ${GUNICORN_GRACEFUL:-30}
+              --backlog ${GUNICORN_BACKLOG:-2048}
+              --log-level info
+              --access-logfile -
+
+          ports:
+            - containerPort: {{ .Values.langflow.service.targetPort }}
+              protocol: TCP
+
+          readinessProbe:
+            httpGet:
+              path: /docs
+              port: {{ .Values.langflow.service.targetPort }}
+            initialDelaySeconds: 30
+            periodSeconds: 10
+            timeoutSeconds: 5
+            failureThreshold: 6
+
+          # Volume Mounts
+          volumeMounts:
+            - name: flows-data
+              mountPath: /app/flows
+            - name: logs-data
+              mountPath: /app/logs
+
+            # Optional Mounts for Components and Init Scripts
+            {{- if .Values.langflow.externalFiles.components.enabled }}
+            - name: tis-components
+              mountPath: /app/tis_components
+            {{- end }}
+
+            {{- if .Values.langflow.externalFiles.initScripts.enabled }}
+            - name: init-scripts-python
+              mountPath: /app/init/python
+            {{- end }}
+
+      volumes:
+        # Persistent Data
+        - name: flows-data
+          persistentVolumeClaim:
+            claimName: langflow-flows-pvc
+        - name: logs-data
+          persistentVolumeClaim:
+            claimName: langflow-logs-pvc
+
+        # HostPath Mounts (Dynamic path construction)
+        {{- if .Values.langflow.externalFiles.components.enabled }}
+        - name: tis-components
+          hostPath:
+            path: "{{ .Values.langflow.externalFiles.hostPathRoot }}/{{ .Values.langflow.externalFiles.components.path }}/"
+            type: Directory
+        {{- end }}
+
+        {{- if .Values.langflow.externalFiles.initScripts.enabled }}
+        - name: init-scripts-python
+          hostPath:
+            path: "{{ .Values.langflow.externalFiles.hostPathRoot }}/{{ .Values.langflow.externalFiles.initScripts.path }}/"
+            type: Directory
+        {{- end }}
+  {{- end }}

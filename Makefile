@@ -13,7 +13,9 @@ AWS_KEY_ID ?= AKIAX7SUEXAT7OWTXRLH
 AWS_SECRET_KEY ?= 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
 AWS_REGION ?= eu-central-1
 ECR_URL ?= 548858542119.dkr.ecr.eu-central-1.amazonaws.com
-
+LANGFLOW_SECRET_KEY ?= super_secret_dev_key
+LANGFLOW_SUPERUSER_PASS ?= service_user
+LANGFLOW_PASS ?= langflow
 # ---------------------------------------------------------------------------------
 # ---------------------------- AWS & BASE IMAGES ----------------------------------
 # ---------------------------------------------------------------------------------
@@ -140,7 +142,7 @@ infra-setup:
 
 # CRITICAL: Helm Install must run BEFORE builds, because Helm creates the ConfigMaps
 # that the build scripts depend on.
-bootstrap: mk-delete mk-up mk-setup pre-build infra-setup helm-install aws-login base-build build-k8s rollout-restart
+bootstrap: mk-delete mk-up mk-setup pre-build infra-setup helm-install aws-login base-build build-k8s rollout-restart wait-for-ready init-langflow-users
 	@echo "==========================================================="
 	@echo "🎉 System bootstrapped successfully via Helm & Kaniko!"
 	@echo "   Access services via: localhost:6433 (PgBouncer), localhost:5433 (Postgres), localhost:6380 (Redis)"
@@ -179,6 +181,15 @@ build-k8s-redis:
 		(echo "!!! Redis build failed, showing logs: !!!" && kubectl logs job/redis-build --follow && exit 1)
 	@echo "Redis build completed."
 
+build-k8s-langflow:
+	@echo "----------------- Building Langflow for Kubernetes -------------------"
+	@kubectl delete job langflow-build --ignore-not-found=true
+	@kubectl apply -f kubernetes/langflow/langflow-build-job.yaml
+	@echo "Waiting for Langflow build job..."
+	@kubectl wait --for=condition=complete job/langflow-build --timeout=180s || \
+		(echo "!!! Langflow build failed, showing logs: !!!" && kubectl logs job/langflow-build --follow && exit 1)
+	@echo "Langflow build completed."
+
 # ---------------------------------------------------------------------------------
 # ----------------------------------- HELM DEPLOY ---------------------------------
 # ---------------------------------------------------------------------------------
@@ -192,7 +203,10 @@ helm-install:
 		--set global.aws.accessKeyId="$(AWS_KEY_ID)" \
 		--set global.aws.secretAccessKey="$(AWS_SECRET_KEY)" \
 		--set postgres.auth.password="$(PG_PASS)" \
-		--set redis.auth.password="$(REDIS_PASS)"
+		--set redis.auth.password="$(REDIS_PASS)" \
+		--set langflow.auth.secretKey="$(LANGFLOW_SECRET_KEY)" \
+		--set langflow.auth.superuserPassword="$(LANGFLOW_SUPERUSER_PASS)" \
+		--set langflow.auth.password="$(LANGFLOW_PASS)"
 
 helm-uninstall:
 	@echo "----------------- Removing TIS Stack -------------------"
@@ -214,6 +228,14 @@ rollout-restart:
 	kubectl rollout status deployment postgres
 	kubectl rollout status deployment redis
 	kubectl rollout status deployment pgbouncer
+
+wait-for-ready:
+	@echo "----------------- Waiting for all deployments to be ready -------------------"
+	@kubectl wait --for=condition=available deployment/postgres --timeout=120s
+	@kubectl wait --for=condition=available deployment/redis --timeout=120s
+	@kubectl wait --for=condition=available deployment/pgbouncer --timeout=120s
+	@echo "Waiting for Langflow..."
+	@kubectl wait --for=condition=available deployment/langflow --timeout=180s
 
 ps-k8s:
 	@echo "----------------- Listing running Kubernetes pods -------------------"
@@ -248,3 +270,24 @@ test-redis:
 test-db:
 	@chmod +x kubernetes/tests/test-db.sh
 	@bash kubernetes/tests/test-db.sh
+
+# ---------------------------------------------------------------------------------
+# -------------------------------- INIT SCRIPTS -----------------------------------
+# ---------------------------------------------------------------------------------
+
+init-langflow-users:
+	@echo "----------------- Executing init scripts inside the Langflow container -------------------"
+	@# Find the running Langflow pod name
+	@LANGFLOW_POD=$$(kubectl get pods -l app=langflow -o jsonpath='{.items[0].metadata.name}'); \
+	if [ -z "$$LANGFLOW_POD" ]; then echo "X Langflow pod not found!"; exit 1; fi; \
+	\
+	echo "--- Creating /app/tmp directory inside the pod ---"; \
+	kubectl exec "$${LANGFLOW_POD}" -- mkdir -p /app/tmp; \
+	\
+	echo "--- Running init_service_user.py in pod: $${LANGFLOW_POD} ---"; \
+	kubectl exec "$${LANGFLOW_POD}" -- python /app/init/python/init_service_user.py; \
+	\
+	echo "--- Running init_public_user.py in pod: $${LANGFLOW_POD} ---"; \
+	kubectl exec "$${LANGFLOW_POD}" -- python /app/init/python/init_public_user.py; \
+	\
+	echo "Init scripts finished successfully."
