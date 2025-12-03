@@ -37,25 +37,40 @@ spec:
     spec:
       containers:
         - name: postgres
-          image: "{{ .Values.global.registry }}/{{ .Values.postgres.image.repository }}"
+          image: "{{ .Values.global.registry }}/{{ .Values.postgres.image.repository }}:{{ .Values.postgres.image.tag }}"
           imagePullPolicy: {{ .Values.global.imagePullPolicy }}
           ports:
             - containerPort: {{ .Values.postgres.service.port }}
+
+          envFrom:
+            - configMapRef:
+                name: global-config
+            - configMapRef:
+                name: postgres-config
+
           env:
-            - name: POSTGRES_USER
-              value: { { .Values.postgres.auth.username | quote } }
+            - name: DB_LIST
+              value: "{{ range .Values.postgres.databases }}{{ . }} {{ end }}"
             - name: POSTGRES_PASSWORD
               valueFrom:
                 secretKeyRef:
                   name: tis-app-secrets
                   key: postgres-password
-            - name: POSTGRES_DB
-              value: { { .Values.postgres.auth.database | quote } }
+            - name: PGDATA
+              value: /var/lib/postgresql/data/pgdata
+
           volumeMounts:
             - name: postgres-data
               mountPath: /var/lib/postgresql/data
+            - name: init-scripts
+              mountPath: /docker-entrypoint-initdb.d
+
       volumes:
         - name: postgres-data
           persistentVolumeClaim:
             claimName: postgres-pvc
+        - name: init-scripts
+          configMap:
+            name: postgres-init-scripts
+            defaultMode: 0755
   {{- end }}

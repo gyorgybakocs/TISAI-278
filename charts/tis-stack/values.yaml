@@ -2,19 +2,39 @@ global:
   registry: "registry.default.svc.cluster.local:5000"
   imagePullPolicy: Always
   aws:
+    region: "eu-central-1"
+    ecrRegistryUrl: "548858542119.dkr.ecr.eu-central-1.amazonaws.com"
     accessKeyId: ""
     secretAccessKey: ""
+
+  envTag: "prd"
+  imgPrefix: "tis"
+
+  # Centralized versions for Makefile compatibility
+  versions:
+    postgres: "tis-1.0.0"
+    pgbouncer: "tis-1.0.0"
+    redis: "tis-1.0.0"
 
 postgres:
   enabled: true
   image:
-    repository: "postgres/postgres:built"
+    repository: "postgres/postgres"
+    tag: "built"
+    originalName: "ai-postgres" # Required for legacy ConfigMap
   service:
     port: 5432
+    redirectPort: 5433
+  # List of databases to be created on startup
+  databases:
+    - langflow_db
+    - app_db
+    - keycloak_db
+    - langfuse_db
   auth:
     username: "postgres_user"
     password: ""
-    database: "langflow_db"
+    database: "mydatabase"
   persistence:
     size: 1Gi
   config:
@@ -23,9 +43,12 @@ postgres:
 pgbouncer:
   enabled: true
   image:
-    repository: "pgbouncer/pgbouncer:built"
+    repository: "pgbouncer/pgbouncer"
+    tag: "built"
+    originalName: "edoburu/pgbouncer:v1.24.1-p1" # Required for legacy ConfigMap
   service:
     port: 6432
+    redirectPort: 6433
   pool:
     mode: session
     max_client_conn: 1000
@@ -34,9 +57,12 @@ pgbouncer:
 redis:
   enabled: true
   image:
-    repository: "redis/redis:built"
+    repository: "redis/redis"
+    tag: "built"
+    originalName: "ai-redis" # Required for legacy ConfigMap
   service:
     port: 6379
+    redirectPort: 6380
   auth:
     password: ""
   persistence:

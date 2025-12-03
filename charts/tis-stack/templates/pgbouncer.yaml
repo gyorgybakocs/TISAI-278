@@ -16,6 +16,7 @@ kind: Deployment
 metadata:
   name: pgbouncer
 spec:
+  replicas: 1
   selector:
     matchLabels:
       app: pgbouncer
@@ -26,8 +27,33 @@ spec:
     spec:
       containers:
         - name: pgbouncer
-          image: "{{ .Values.global.registry }}/{{ .Values.pgbouncer.image.repository }}"
+          image: "{{ .Values.global.registry }}/{{ .Values.pgbouncer.image.repository }}:{{ .Values.pgbouncer.image.tag }}"
           imagePullPolicy: {{ .Values.global.imagePullPolicy }}
           ports:
             - containerPort: {{ .Values.pgbouncer.service.port }}
+
+          # Load metadata from ConfigMaps (for consistency/debug)
+          envFrom:
+            - configMapRef:
+                name: global-config
+            - configMapRef:
+                name: pgbouncer-config
+
+          # Configure Entrypoint script via explicit Env Vars
+          env:
+            - name: DB_HOST
+              value: "postgres-db"
+            - name: DB_PORT
+              value: "{{ .Values.postgres.service.port }}"
+            - name: DB_NAME
+              value: "{{ .Values.postgres.auth.database }}"
+            - name: DB_USER
+              value: "{{ .Values.postgres.auth.username }}"
+            - name: DB_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: tis-app-secrets
+                  key: postgres-password
+            - name: LISTEN_PORT
+              value: "{{ .Values.pgbouncer.service.port }}"
   {{- end }}

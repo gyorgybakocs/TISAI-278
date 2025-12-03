@@ -37,10 +37,19 @@ spec:
     spec:
       containers:
         - name: redis
-          image: "{{ .Values.global.registry }}/{{ .Values.redis.image.repository }}"
+          image: "{{ .Values.global.registry }}/{{ .Values.redis.image.repository }}:{{ .Values.redis.image.tag }}"
           imagePullPolicy: {{ .Values.global.imagePullPolicy }}
           command: ["redis-server"]
           args: ["--requirepass", "$(REDIS_PASSWORD)", "--appendonly", "yes"]
+
+          # Load full configuration
+          envFrom:
+            - configMapRef:
+                name: global-config
+            - configMapRef:
+                name: redis-config
+
+          # Load Secret
           env:
             - name: REDIS_PASSWORD
               valueFrom:

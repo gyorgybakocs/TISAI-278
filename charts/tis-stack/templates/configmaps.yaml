@@ -1,0 +1,64 @@
+# 1. Global Config
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: global-config
+data:
+  AWS_DEFAULT_REGION: {{ .Values.global.aws.region | quote }}
+  AWS_ECR_REGISTRY_URL: {{ .Values.global.aws.ecrRegistryUrl | quote }}
+  IMG_PREFIX: {{ .Values.global.imgPrefix | quote }}
+  ENV_TAG: {{ .Values.global.envTag | quote }}
+  # Add default branch if needed by Makefile
+  BITBUCKET_BRANCH: "master"
+
+---
+# 2. Postgres Config (For Makefile & App)
+  {{- if .Values.postgres.enabled }}
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: postgres-config
+data:
+  POSTGRES_DB: {{ .Values.postgres.auth.database | quote }}
+  POSTGRES_USER: {{ .Values.postgres.auth.username | quote }}
+  POSTGRES_IMAGE: {{ .Values.postgres.image.originalName | quote }}
+  POSTGRES_BUILT_IMAGE: "{{ .Values.postgres.image.repository }}:{{ .Values.postgres.image.tag }}"
+  POSTGRES_SERVICE: "postgres-db"
+  POSTGRES_HOST: "postgres-db"
+  POSTGRES_PORT: {{ .Values.postgres.service.port | quote }}
+  POSTGRES_REDIRECT_PORT: {{ .Values.postgres.service.redirectPort | quote }}
+  POSTGRES_VERSION: {{ .Values.global.versions.postgres | quote }}
+  {{- end }}
+
+---
+# 3. Redis Config (For Makefile & App)
+  {{- if .Values.redis.enabled }}
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: redis-config
+data:
+  REDIS_IMAGE: {{ .Values.redis.image.originalName | quote }}
+  REDIS_VERSION: {{ .Values.global.versions.redis | quote }}
+  REDIS_BUILT_IMAGE: "{{ .Values.redis.image.repository }}:{{ .Values.redis.image.tag }}"
+  REDIS_SERVICE: "redis"
+  REDIS_HOST: "redis"
+  REDIS_PORT: {{ .Values.redis.service.port | quote }}
+  REDIS_REDIRECT_PORT: {{ .Values.redis.service.redirectPort | quote }}
+  {{- end }}
+
+---
+# 4. PgBouncer Config (For Makefile & App)
+  {{- if .Values.pgbouncer.enabled }}
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: pgbouncer-config
+data:
+  PGBOUNCER_IMAGE: {{ .Values.pgbouncer.image.originalName | quote }}
+  PGBOUNCER_BUILT_IMAGE: "{{ .Values.pgbouncer.image.repository }}:{{ .Values.pgbouncer.image.tag }}"
+  PGBOUNCER_SERVICE: "pgbouncer"
+  PGBOUNCER_PORT: {{ .Values.pgbouncer.service.port | quote }}
+  PGBOUNCER_REDIRECT_PORT: {{ .Values.pgbouncer.service.redirectPort | quote }}
+  PGBOUNCER_VERSION: {{ .Values.global.versions.pgbouncer | quote }}
+  {{- end }}

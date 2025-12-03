@@ -1,0 +1,9 @@
+{{- if .Values.postgres.enabled }}
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: postgres-init-scripts
+data:
+  init-db.sh: |-
+{{ .Files.Get "files/init-db.sh" | indent 4 }}
+{{- end }}
