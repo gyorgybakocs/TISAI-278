@@ -1,10 +1,10 @@
 [databases]
-${DB_NAME} = host=${DB_HOST} port=${DB_PORT} dbname=${DB_NAME} user=${DB_USER} password=${DB_PASSWORD}
+* = host=${DB_HOST} port=${DB_PORT}
 
 [pgbouncer]
 listen_port = ${LISTEN_PORT}
 listen_addr = 0.0.0.0
-auth_type = md5
+auth_type = scram-sha-256
 auth_file = /etc/pgbouncer/userlist.txt
 admin_users = ${DB_USER}
 stats_users = ${DB_USER}

@@ -34,7 +34,7 @@ postgres:
   auth:
     username: "postgres_user"
     password: ""
-    database: "mydatabase"
+    database: "langflow_db"
   persistence:
     size: 1Gi
   config:
