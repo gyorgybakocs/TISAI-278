@@ -1,10 +1,8 @@
 global:
-  # Registry URL where custom images are stored
   registry: "registry.default.svc.cluster.local:5000"
   imagePullPolicy: Always
   aws:
     region: "eu-central-1"
-    # AWS ECR URL for pulling base images
     ecrRegistryUrl: "548858542119.dkr.ecr.eu-central-1.amazonaws.com"
     accessKeyId: ""
     secretAccessKey: ""
@@ -12,22 +10,21 @@ global:
   envTag: "prd"
   imgPrefix: "tis"
 
-  # Centralized versions for Makefile compatibility
   versions:
     postgres: "tis-1.0.0"
     pgbouncer: "tis-1.0.0"
     redis: "tis-1.0.0"
+    langflow: "tis-1.0.0"
 
 postgres:
   enabled: true
   image:
     repository: "postgres/postgres"
     tag: "built"
-    originalName: "ai-postgres" # Required for legacy ConfigMap lookup
+    originalName: "ai-postgres"
   service:
     port: 5432
     redirectPort: 5433
-  # List of databases to be created on startup via init-db.sh
   databases:
     - langflow_db
     - app_db
@@ -36,7 +33,6 @@ postgres:
   auth:
     username: "postgres_user"
     password: ""
-    # Default database name (used by backend apps and initial connection)
     database: "langflow_db"
   persistence:
     size: 1Gi
@@ -48,7 +44,7 @@ pgbouncer:
   image:
     repository: "pgbouncer/pgbouncer"
     tag: "built"
-    originalName: "edoburu/pgbouncer:v1.24.1-p1" # Required for legacy ConfigMap lookup
+    originalName: "edoburu/pgbouncer:v1.24.1-p1"
   service:
     port: 6432
     redirectPort: 6433
@@ -59,33 +55,16 @@ pgbouncer:
 
 redis:
   enabled: true
-  # Static replica count (used if autoscaling is disabled)
-  replicaCount: 3
-  autoscaling:
-    enabled: false
-#  # Horizontal Pod Autoscaler configuration
-#  autoscaling:
-#    enabled: true
-#    # Minimum replicas to maintain High Availability (HA)
-#    minReplicas: 2
-#    # Maximum replicas to scale up to during high load
-#    maxReplicas: 5
-#    # Target CPU utilization percentage to trigger scaling
-#    targetCPUUtilizationPercentage: 80
-#    # Target Memory utilization percentage (optional, dependent on metrics server)
-#    targetMemoryUtilizationPercentage: 80
   image:
     repository: "redis/redis"
     tag: "built"
-    originalName: "ai-redis" # Required for legacy ConfigMap lookup
+    originalName: "ai-redis"
   service:
     port: 6379
     redirectPort: 6380
   auth:
-    # Password is injected via Secrets
     password: ""
   persistence:
-    # Size of the PersistentVolume for each Redis pod
     size: 1Gi
 
 langflow:
@@ -100,9 +79,9 @@ langflow:
     type: NodePort
     port: 7860
     targetPort: 7860
+    redirectPort: 7860
     nodePort: 30001 # Fixed port for easier access
 
-  # Resource configuration for Gunicorn
   resources:
     workers: 1
     threads: 1
@@ -111,7 +90,6 @@ langflow:
     gracefulTimeout: 30
     backlog: 2048
 
-  # Persistence settings
   persistence:
     flows:
       size: 1Gi
@@ -119,15 +97,13 @@ langflow:
       size: 1Gi
 
   externalFiles:
-    # Root path on the host machine where the repo is located
     hostPathRoot: "/workspace"
     components:
       enabled: true
-      path: "src/tis_components"
+      path: "kubernetes/langflow/src/tis_components"
     initScripts:
       enabled: true
-      path: "init/python"
-  # Application Logic Configuration
+      path: "kubernetes/langflow/init/python"
   config:
     logLevel: "debug"
     cacheType: "memory"
@@ -139,7 +115,6 @@ langflow:
     updateStarterProjects: "False"
     backendUrl: "http://localhost:7860"
 
-  # Authentication & Secrets
   auth:
     secretKey: ""
     superuserPassword: ""

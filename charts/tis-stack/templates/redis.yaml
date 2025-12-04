@@ -42,14 +42,12 @@ spec:
           command: ["redis-server"]
           args: ["--requirepass", "$(REDIS_PASSWORD)", "--appendonly", "yes"]
 
-          # Load full configuration
           envFrom:
             - configMapRef:
                 name: global-config
             - configMapRef:
                 name: redis-config
 
-          # Load Secret
           env:
             - name: REDIS_PASSWORD
               valueFrom:

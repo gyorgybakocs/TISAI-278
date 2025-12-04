@@ -32,14 +32,12 @@ spec:
           ports:
             - containerPort: {{ .Values.pgbouncer.service.port }}
 
-          # Load metadata from ConfigMaps (for consistency/debug)
           envFrom:
             - configMapRef:
                 name: global-config
             - configMapRef:
                 name: pgbouncer-config
 
-          # Configure Entrypoint script via explicit Env Vars
           env:
             - name: DB_HOST
               value: "postgres-db"

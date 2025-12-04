@@ -66,18 +66,13 @@ spec:
     spec:
       containers:
         - name: langflow
-          # Dynamic image path constructed from global registry and local settings
           image: "{{ .Values.global.registry }}/{{ .Values.langflow.image.repository }}:{{ .Values.langflow.image.tag }}"
           imagePullPolicy: {{ .Values.langflow.image.pullPolicy }}
 
-          # Load Environment Variables from ConfigMap
           envFrom:
             - configMapRef:
                 name: langflow-config
-
-          # Specific Env Vars (Secrets and Dynamic DB Connection)
           env:
-            # --- Secrets (Loaded from the shared tis-app-secrets) ---
             - name: LANGFLOW_SECRET_KEY
               valueFrom:
                 secretKeyRef:
@@ -93,8 +88,6 @@ spec:
                 secretKeyRef:
                   name: tis-app-secrets
                   key: langflow-password
-
-            # --- Database Connection Construction ---
             - name: POSTGRES_DB_NAME
               valueFrom:
                 configMapKeyRef:
@@ -120,27 +113,17 @@ spec:
                 secretKeyRef:
                   name: tis-app-secrets
                   key: postgres-password
-
-            # Construct the final DB URL
             - name: LANGFLOW_DATABASE_URL
               value: "postgresql://$(POSTGRES_USER):$(POSTGRES_PASSWORD)@$(POSTGRES_HOST):$(POSTGRES_PORT)/$(POSTGRES_DB_NAME)"
 
-          # Startup Command (Gunicorn with Uvicorn workers)
           command: [ "/bin/sh", "-lc" ]
           args:
             - >
-              exec /app/.venv/bin/python -m gunicorn "langflow.main:create_app()"
-              -k uvicorn.workers.UvicornWorker
+              exec /app/.venv/bin/python -m langflow run
+              --host 0.0.0.0
+              --port ${LANGFLOW_PORT:-7860}
               --workers ${WEB_CONCURRENCY:-1}
-              --threads ${WEB_THREADS:-1}
-              --bind 0.0.0.0:${LANGFLOW_PORT:-7860}
-              --timeout ${GUNICORN_TIMEOUT:-120}
-              --keep-alive ${GUNICORN_KEEPALIVE:-5}
-              --graceful-timeout ${GUNICORN_GRACEFUL:-30}
-              --backlog ${GUNICORN_BACKLOG:-2048}
-              --log-level info
-              --access-logfile -
-
+              --log-level ${LANGFLOW_LOG_LEVEL:-info}
           ports:
             - containerPort: {{ .Values.langflow.service.targetPort }}
               protocol: TCP
@@ -154,14 +137,11 @@ spec:
             timeoutSeconds: 5
             failureThreshold: 6
 
-          # Volume Mounts
           volumeMounts:
             - name: flows-data
               mountPath: /app/flows
             - name: logs-data
               mountPath: /app/logs
-
-            # Optional Mounts for Components and Init Scripts
             {{- if .Values.langflow.externalFiles.components.enabled }}
             - name: tis-components
               mountPath: /app/tis_components
@@ -173,22 +153,18 @@ spec:
             {{- end }}
 
       volumes:
-        # Persistent Data
         - name: flows-data
           persistentVolumeClaim:
             claimName: langflow-flows-pvc
         - name: logs-data
           persistentVolumeClaim:
             claimName: langflow-logs-pvc
-
-        # HostPath Mounts (Dynamic path construction)
         {{- if .Values.langflow.externalFiles.components.enabled }}
         - name: tis-components
           hostPath:
             path: "{{ .Values.langflow.externalFiles.hostPathRoot }}/{{ .Values.langflow.externalFiles.components.path }}/"
             type: Directory
         {{- end }}
-
         {{- if .Values.langflow.externalFiles.initScripts.enabled }}
         - name: init-scripts-python
           hostPath:

@@ -1,10 +1,10 @@
 # ---------------------------------------------------------------------------------
 # ---------------------------- CONFIGURATION --------------------------------------
 # ---------------------------------------------------------------------------------
-BASE_NAMES = POSTGRES REDIS
+BASE_NAMES = POSTGRES REDIS LANGFLOW
 DOCKERHUB_BASE_NAMES = PGBOUNCER
 # Portforward targets for local debugging
-PORTFORWARD = POSTGRES PGBOUNCER REDIS
+PORTFORWARD = POSTGRES PGBOUNCER REDIS LANGFLOW
 
 # Default credentials (injectable via command line)
 PG_PASS ?= password
@@ -142,11 +142,14 @@ infra-setup:
 
 # CRITICAL: Helm Install must run BEFORE builds, because Helm creates the ConfigMaps
 # that the build scripts depend on.
-bootstrap: mk-delete mk-up mk-setup pre-build infra-setup helm-install aws-login base-build build-k8s rollout-restart wait-for-ready init-langflow-users
+# bootstrap: mk-delete mk-up mk-setup pre-build infra-setup helm-install aws-login base-build build-k8s rollout-restart wait-for-ready init-langflow-users
+bootstrap: mk-delete mk-up mk-setup pre-build infra-setup helm-install aws-login base-build build-k8s
 	@echo "==========================================================="
 	@echo "🎉 System bootstrapped successfully via Helm & Kaniko!"
 	@echo "   Access services via: localhost:6433 (PgBouncer), localhost:5433 (Postgres), localhost:6380 (Redis)"
 	@echo "==========================================================="
+
+init-k8s: up-helm init-langflow-users
 
 # ---------------------------------------------------------------------------------
 # ----------------------------------- BUILD JOBS ----------------------------------
@@ -270,6 +273,10 @@ test-redis:
 test-db:
 	@chmod +x kubernetes/tests/test-db.sh
 	@bash kubernetes/tests/test-db.sh
+
+test-gunicorn:
+	@chmod +x kubernetes/tests/test-gunicorn.sh
+	@bash kubernetes/tests/test-gunicorn.sh
 
 # ---------------------------------------------------------------------------------
 # -------------------------------- INIT SCRIPTS -----------------------------------

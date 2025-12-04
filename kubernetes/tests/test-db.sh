@@ -12,6 +12,25 @@ TEST_VALUE="InitTest_$(date +%s)"
 echo "Client Pod: $CLIENT_POD"
 
 echo "-----------------------------------------------"
+echo "🔍 DIAGNOSTICS: Listing Databases & Tables"
+echo "-----------------------------------------------"
+
+# 1. Listázza az összes adatbázist
+echo "Available Databases:"
+kubectl exec $CLIENT_POD -- bash -c "
+    export PGPASSWORD=\"\$POSTGRES_PASSWORD\";
+    psql -U \"\$POSTGRES_USER\" -d postgres -c '\l'
+"
+
+# 2. Listázza a táblákat a cél adatbázisban (langflow_db)
+echo "-----------------------------------------------"
+echo "Tables in $DB_NAME:"
+kubectl exec $CLIENT_POD -- bash -c "
+    export PGPASSWORD=\"\$POSTGRES_PASSWORD\";
+    psql -U \"\$POSTGRES_USER\" -d $DB_NAME -c '\dt' || echo '⚠️  Database $DB_NAME does not exist or is not accessible.'
+"
+
+echo "-----------------------------------------------"
 echo "1️⃣  Writing via PGBOUNCER (Service: pgbouncer, Port: 6432)"
 kubectl exec $CLIENT_POD -- bash -c "
     export PGPASSWORD=\"\$POSTGRES_PASSWORD\";
