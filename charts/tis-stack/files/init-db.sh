@@ -2,7 +2,7 @@
 set -e
 
 echo "========================================================================"
-echo "=> Starting dynamic database initialization..."
+echo "=> Starting dynamic database initialization & Citus Activation..."
 echo "   Target Databases: $DB_LIST"
 echo "========================================================================"
 
@@ -14,8 +14,13 @@ for db in $DB_LIST; do
         SELECT 'CREATE DATABASE "$db"'
         WHERE NOT EXISTS (SELECT FROM pg_database WHERE datname = '$db')\gexec
 EOSQL
+
+    echo "   -> ⚡ Activating Citus extension in: $db"
+    psql -v ON_ERROR_STOP=1 --username "$POSTGRES_USER" --dbname "$db" <<-EOSQL
+        CREATE EXTENSION IF NOT EXISTS citus;
+EOSQL
 done
 
 echo "========================================================================"
-echo "=> Initialization complete."
+echo "=> Initialization complete. / Citus is ready."
 echo "========================================================================"

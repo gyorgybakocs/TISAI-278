@@ -101,13 +101,13 @@ spec:
             - name: POSTGRES_HOST
               valueFrom:
                 configMapKeyRef:
-                  name: postgres-config
-                  key: POSTGRES_HOST
+                  name: pgbouncer-config
+                  key: PGBOUNCER_SERVICE
             - name: POSTGRES_PORT
               valueFrom:
                 configMapKeyRef:
-                  name: postgres-config
-                  key: POSTGRES_PORT
+                  name: pgbouncer-config
+                  key: PGBOUNCER_PORT
             - name: POSTGRES_PASSWORD
               valueFrom:
                 secretKeyRef:

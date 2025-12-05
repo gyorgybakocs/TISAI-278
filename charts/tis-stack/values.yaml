@@ -19,9 +19,9 @@ global:
 postgres:
   enabled: true
   image:
-    repository: "postgres/postgres"
+    repository: "citus/citus"
     tag: "built"
-    originalName: "ai-postgres"
+    originalName: "citusdata/citus:13.2-pg16"
   service:
     port: 5432
     redirectPort: 5433
@@ -49,7 +49,7 @@ pgbouncer:
     port: 6432
     redirectPort: 6433
   pool:
-    mode: transaction
+    mode: session
     max_client_conn: 1000
     default_pool_size: 20
 

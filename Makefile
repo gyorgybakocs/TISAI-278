@@ -1,8 +1,8 @@
 # ---------------------------------------------------------------------------------
 # ---------------------------- CONFIGURATION --------------------------------------
 # ---------------------------------------------------------------------------------
-BASE_NAMES = POSTGRES REDIS LANGFLOW
-DOCKERHUB_BASE_NAMES = PGBOUNCER
+BASE_NAMES = REDIS LANGFLOW
+DOCKERHUB_BASE_NAMES = PGBOUNCER POSTGRES
 # Portforward targets for local debugging
 PORTFORWARD = POSTGRES PGBOUNCER REDIS LANGFLOW
 
@@ -143,7 +143,7 @@ infra-setup:
 # CRITICAL: Helm Install must run BEFORE builds, because Helm creates the ConfigMaps
 # that the build scripts depend on.
 # bootstrap: mk-delete mk-up mk-setup pre-build infra-setup helm-install aws-login base-build build-k8s rollout-restart wait-for-ready init-langflow-users
-bootstrap: mk-delete mk-up mk-setup pre-build infra-setup helm-install aws-login base-build build-k8s
+bootstrap: mk-delete mk-up mk-setup pre-build infra-setup helm-install aws-login base-build build-k8s rollout-restart wait-for-ready verify-infra
 	@echo "==========================================================="
 	@echo "🎉 System bootstrapped successfully via Helm & Kaniko!"
 	@echo "   Access services via: localhost:6433 (PgBouncer), localhost:5433 (Postgres), localhost:6380 (Redis)"
@@ -245,14 +245,19 @@ ps-k8s:
 	@kubectl get pods
 
 port-forward-services:
+	@echo "----------------- Cleaning up old port-forwards... -------------------"
+	@-pkill -f "kubectl port-forward" || true
+	@sleep 2
+
+	@echo "----------------- Starting new port-forwards... -------------------"
 	@for portforward in $(PORTFORWARD); do \
-		echo "----------------- Forwarding $$portforward to localhost... -------------------"; \
+		echo "--> Forwarding $$portforward..."; \
 		portforward_lower=$$(echo $$portforward | tr 'A-Z' 'a-z'); \
 		config_map=$${portforward_lower}-config; \
         PORT=$$(kubectl get configmap $$config_map -o jsonpath="{.data.$${portforward}_PORT}"); \
         REDIRECT_PORT=$$(kubectl get configmap $$config_map -o jsonpath="{.data.$${portforward}_REDIRECT_PORT}"); \
         nohup kubectl port-forward svc/$${portforward_lower} "$${REDIRECT_PORT}:$${PORT}" > /dev/null 2>&1 & \
-        echo "--> $$portforward available at localhost:$${REDIRECT_PORT}"; \
+        echo "    DONE: localhost:$${REDIRECT_PORT} -> svc/$${portforward_lower}:$${PORT}"; \
 	done
 
 up-helm: helm-install port-forward-services
@@ -278,13 +283,28 @@ test-gunicorn:
 	@chmod +x kubernetes/tests/test-gunicorn.sh
 	@bash kubernetes/tests/test-gunicorn.sh
 
+test-citus:
+	@chmod +x kubernetes/tests/test-citus.sh
+	@bash kubernetes/tests/test-citus.sh
+
+verify-infra:
+	@echo "==========================================================="
+	@echo "🔍 VERIFYING INFRASTRUCTURE HEALTH (Pre-Init)"
+	@echo "==========================================================="
+	@make test-redis
+	@echo "-----------------------------------------------------------"
+	@make test-db
+	@echo "-----------------------------------------------------------"
+	@make test-gunicorn
+	@echo "==========================================================="
+	@echo "✅ INFRASTRUCTURE IS HEALTHY. READY FOR INIT."
+
 # ---------------------------------------------------------------------------------
 # -------------------------------- INIT SCRIPTS -----------------------------------
 # ---------------------------------------------------------------------------------
 
 init-langflow-users:
 	@echo "----------------- Executing init scripts inside the Langflow container -------------------"
-	@# Find the running Langflow pod name
 	@LANGFLOW_POD=$$(kubectl get pods -l app=langflow -o jsonpath='{.items[0].metadata.name}'); \
 	if [ -z "$$LANGFLOW_POD" ]; then echo "X Langflow pod not found!"; exit 1; fi; \
 	\
@@ -297,4 +317,20 @@ init-langflow-users:
 	echo "--- Running init_public_user.py in pod: $${LANGFLOW_POD} ---"; \
 	kubectl exec "$${LANGFLOW_POD}" -- python /app/init/python/init_public_user.py; \
 	\
-	echo "Init scripts finished successfully."
+	echo "Init scripts finished successfully." \
+
+init-citus-sharding:
+	@echo "----------------- ⚡ APPLYING CITUS SHARDING ⚡ -------------------"; \
+	PG_POD=$$(kubectl get pods -l app=postgres -o jsonpath='{.items[0].metadata.name}'); \
+	if [ -z "$$PG_POD" ]; then echo "❌ Postgres pod not found!"; exit 1; fi; \
+	\
+	echo "--> Listing existing tables (for verification):"; \
+	kubectl exec "$$PG_POD" -- bash -c "export PGPASSWORD='$(PG_PASS)'; psql -U postgres_user -d langflow_db -c '\dt'" || true; \
+	\
+	echo "--> Distributing 'transaction' table (Shard Key: id)..."; \
+	kubectl exec "$$PG_POD" -- bash -c "export PGPASSWORD='$(PG_PASS)'; psql -U postgres_user -d langflow_db -c \"SELECT create_distributed_table('transaction', 'id');\"" || echo "⚠️  Warning: 'transaction' already distributed or failed."; \
+	\
+	echo "--> Distributing 'message' table (Shard Key: id - because we cannot modify Langflow PK)..."; \
+	kubectl exec "$$PG_POD" -- bash -c "export PGPASSWORD='$(PG_PASS)'; psql -U postgres_user -d langflow_db -c \"SELECT create_distributed_table('message', 'id');\"" || echo "⚠️  Warning: 'message' already distributed or failed."; \
+	\
+	echo "✅ Sharding setup finished."
