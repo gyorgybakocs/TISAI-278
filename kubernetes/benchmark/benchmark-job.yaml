@@ -1,0 +1,18 @@
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: langflow-benchmark
+spec:
+  template:
+    spec:
+      serviceAccountName: benchmark-sa
+      containers:
+        - name: benchmark
+          image: ${REGISTRY_HOST}:30500/benchmark:latest
+          imagePullPolicy: Always
+          command: ["/app/benchmark.sh"]
+          args:
+            - "${FLOW_ID}"
+            - "${API_KEY}"
+      restartPolicy: Never
+  backoffLimit: 1

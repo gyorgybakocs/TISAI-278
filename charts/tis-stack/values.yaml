@@ -90,6 +90,14 @@ langflow:
     gracefulTimeout: 30
     backlog: 2048
 
+  podResources:
+    requests:
+      memory: "512Mi"
+      cpu: "250m"
+    limits:
+      memory: "2Gi"
+      cpu: "1"
+
   persistence:
     flows:
       size: 1Gi

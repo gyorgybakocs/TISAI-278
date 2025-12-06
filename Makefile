@@ -334,3 +334,81 @@ init-citus-sharding:
 	kubectl exec "$$PG_POD" -- bash -c "export PGPASSWORD='$(PG_PASS)'; psql -U postgres_user -d langflow_db -c \"SELECT create_distributed_table('message', 'id');\"" || echo "⚠️  Warning: 'message' already distributed or failed."; \
 	\
 	echo "✅ Sharding setup finished."
+
+switch-to-transaction:
+	@echo "----------------- ⚡ OPTIMIZING: Switching PgBouncer to TRANSACTION Mode ⚡ -------------------"
+	@# A --reuse-values megtartja a jelszavakat és egyéb beállításokat, csak a módot írja felül
+	@helm upgrade tis-stack ./charts/tis-stack --reuse-values --set pgbouncer.pool.mode=transaction
+	@\
+	echo "--> Restarting PgBouncer to apply config..."; \
+	kubectl rollout restart deployment pgbouncer; \
+	echo "--> Restarting Langflow to reset connection pool..."; \
+	kubectl rollout restart deployment langflow; \
+	\
+	echo "--> Waiting for stability..."; \
+	kubectl rollout status deployment pgbouncer; \
+	kubectl rollout status deployment langflow; \
+	echo "✅ Switch complete. System is ready for load."
+
+# ---------------------------------------------------------------------------------
+# --------------------------------- BENCHMARK -------------------------------------
+# ---------------------------------------------------------------------------------
+create-test-flow:
+	@echo "--- Creating test flow for benchmarking ---"
+	@LANGFLOW_POD=$$(kubectl get pods -l app=langflow -o jsonpath='{.items[0].metadata.name}'); \
+	OUTPUT=$$(kubectl exec "$${LANGFLOW_POD}" -- python /app/init/python/init_benchmark_flow.py); \
+	echo "$$OUTPUT"; \
+	\
+	FLOW_ID=$$(echo "$$OUTPUT" | grep 'BENCHMARK_DATA:FLOW_ID=' | cut -d'=' -f2 | tr -d '\r'); \
+	API_KEY=$$(echo "$$OUTPUT" | grep 'BENCHMARK_DATA:API_KEY=' | cut -d'=' -f2 | tr -d '\r'); \
+	\
+	echo "Saving to ConfigMap and Secret..."; \
+	kubectl patch configmap langflow-config --patch "{\"data\":{\"BENCHMARK_FLOW_ID\":\"$$FLOW_ID\"}}"; \
+	kubectl patch secret tis-app-secrets --patch "{\"data\":{\"BENCHMARK_API_KEY\":\"$$(echo -n $$API_KEY | base64)\"}}"; \
+	\
+	echo "Saving to local files for verification..."; \
+	echo "$$FLOW_ID" > .benchmark_flow_id; \
+	echo "$$API_KEY" > .benchmark_api_key; \
+	echo "Test flow created. Flow ID saved to .benchmark_flow_id, API key saved to .benchmark_api_key"
+
+build-benchmark-image:
+	@echo "----------------- Starting port-forward to local registry for benchmark image -------------------"
+	@kubectl port-forward svc/registry 5000:5000 & export BG_PID=$$!; \
+	echo "Waiting for port-forward (PID: $$BG_PID)..." && sleep 5; \
+	echo "----------------- Building and Pushing Benchmark Image -------------------"; \
+	docker build --no-cache -t localhost:5000/benchmark:latest -f kubernetes/benchmark/docker/Dockerfile kubernetes/benchmark; \
+	docker push localhost:5000/benchmark:latest; \
+	echo "----------------- Killing port-forward process (PID: $$BG_PID) -------------------"; \
+	kill $$BG_PID;
+
+run-benchmark:
+	@echo "--- Applying Benchmark RBAC and running Job ---"
+	@kubectl apply -f kubernetes/benchmark/rbac.yaml
+	@kubectl delete job langflow-benchmark --ignore-not-found=true
+	@export REGISTRY_HOST=$$(minikube ip); \
+	export FLOW_ID=$$(kubectl get configmap langflow-config -o jsonpath='{.data.BENCHMARK_FLOW_ID}'); \
+	export API_KEY=$$(kubectl get secret tis-app-secrets -o jsonpath='{.data.BENCHMARK_API_KEY}' | base64 --decode); \
+	envsubst < kubernetes/benchmark/benchmark-job.yaml | kubectl apply -f -
+
+	@echo "--- Waiting for benchmark pod to start..."
+	@BENCHMARK_POD_NAME=""; \
+	while [ -z "$$BENCHMARK_POD_NAME" ]; do \
+	   echo -n "."; \
+	   sleep 1; \
+	   BENCHMARK_POD_NAME=$$(kubectl get pods -l job-name=langflow-benchmark -o jsonpath='{.items[0].metadata.name}' 2>/dev/null); \
+	done; \
+	echo ""; \
+	echo "Waiting for benchmark pod to be ready..."; \
+	kubectl wait --for=condition=ready pod/$$BENCHMARK_POD_NAME --timeout=120s; \
+	echo "Benchmark pod is ready: $$BENCHMARK_POD_NAME. Streaming logs in real-time..."; \
+	kubectl logs -f "$$BENCHMARK_POD_NAME"
+
+	@echo "--- Log stream finished. Verifying final Job status... ---"
+	@sleep 5
+	@JOB_STATUS=$$(kubectl get job langflow-benchmark -o jsonpath='{.status.conditions[?(@.type=="Complete")].status}'); \
+	if [ "$$JOB_STATUS" != "True" ]; then \
+	   echo "!!! Benchmark job did not complete successfully. Check logs above for errors. !!!"; \
+	   exit 1; \
+	fi
+
+	@echo "--- Benchmark Job completed successfully. ---"

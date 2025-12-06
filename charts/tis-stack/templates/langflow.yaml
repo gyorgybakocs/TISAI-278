@@ -69,6 +69,14 @@ spec:
           image: "{{ .Values.global.registry }}/{{ .Values.langflow.image.repository }}:{{ .Values.langflow.image.tag }}"
           imagePullPolicy: {{ .Values.langflow.image.pullPolicy }}
 
+          resources:
+            requests:
+              memory: {{ .Values.langflow.podResources.requests.memory | quote }}
+              cpu: {{ .Values.langflow.podResources.requests.cpu | quote }}
+            limits:
+              memory: {{ .Values.langflow.podResources.limits.memory | quote }}
+              cpu: {{ .Values.langflow.podResources.limits.cpu | quote }}
+
           envFrom:
             - configMapRef:
                 name: langflow-config
