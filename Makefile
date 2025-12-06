@@ -155,7 +155,7 @@ init-k8s: up-helm init-langflow-users
 # ----------------------------------- BUILD JOBS ----------------------------------
 # ---------------------------------------------------------------------------------
 
-build-k8s: mk-setup build-k8s-postgres build-k8s-pgbouncer build-k8s-redis
+build-k8s: mk-setup build-k8s-postgres build-k8s-pgbouncer build-k8s-redis build-k8s-langflow
 
 build-k8s-postgres:
 	@echo "----------------- Building Postgres for Kubernetes -------------------"
