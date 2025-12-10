@@ -8,6 +8,9 @@ export DB_USER=${DB_USER:-postgres_user}
 export DB_PASSWORD=${DB_PASSWORD:-password}
 export DB_NAME=${DB_NAME:-langflow_db}
 export LISTEN_PORT=${LISTEN_PORT:-6432}
+export POOL_MODE=${POOL_MODE:-session}
+export MAX_CLIENT_CONN=${MAX_CLIENT_CONN:-1000}
+export DEFAULT_POOL_SIZE=${DEFAULT_POOL_SIZE:-20}
 
 # Substitute variables in templates to generate actual config files
 # We explicitly output to the final configuration paths

@@ -38,6 +38,13 @@ postgres:
     size: 1Gi
   config:
     max_connections: 150
+    max_prepared_transactions: 150
+    shared_buffers: 8GB
+    effective_cache_size: 24GB
+    work_mem: 24MB
+    maintenance_work_mem: 1GB
+    max_worker_processes: 16
+    max_parallel_workers: 16
 
 pgbouncer:
   enabled: true

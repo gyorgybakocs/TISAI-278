@@ -119,6 +119,26 @@ pre-build:
 	envsubst < kubernetes/limits.yaml.tpl > kubernetes/limits.yaml;
 	@echo "kubernetes/limits.yaml generated successfully."
 
+configure-resources:
+	@echo "----------------- Auto-configuring DB resources for hardware -------------------"
+	@chmod +x kubernetes/configure_resources.sh
+	@bash kubernetes/configure_resources.sh
+	@\
+	echo "--> Restarting PgBouncer to apply config..."; \
+	kubectl rollout restart deployment pgbouncer; \
+	echo "--> Restarting Postgres to apply config..."; \
+	kubectl rollout restart deployment postgres; \
+	\
+	echo "--> Waiting for stability..."; \
+	kubectl rollout status deployment pgbouncer; \
+	kubectl rollout status deployment postgres; \
+	echo "✅ Switch complete. System is ready for load."
+	\
+	echo "--> Checking the results...";
+	@chmod +x kubernetes/tests/checking_vars.sh
+	@bash kubernetes/tests/checking_vars.sh
+	echo "✅ Switch complete. System is ready for load."
+
 # ---------------------------------------------------------------------------------
 # --------------------------------- INFRA SETUP -----------------------------------
 # ---------------------------------------------------------------------------------
@@ -337,7 +357,6 @@ init-citus-sharding:
 
 switch-to-transaction:
 	@echo "----------------- ⚡ OPTIMIZING: Switching PgBouncer to TRANSACTION Mode ⚡ -------------------"
-	@# A --reuse-values megtartja a jelszavakat és egyéb beállításokat, csak a módot írja felül
 	@helm upgrade tis-stack ./charts/tis-stack --reuse-values --set pgbouncer.pool.mode=transaction
 	@\
 	echo "--> Restarting PgBouncer to apply config..."; \

@@ -54,4 +54,19 @@ spec:
                   key: postgres-password
             - name: LISTEN_PORT
               value: "{{ .Values.pgbouncer.service.port }}"
+            - name: POOL_MODE
+              valueFrom:
+                configMapKeyRef:
+                  name: pgbouncer-config
+                  key: POOL_MODE
+            - name: MAX_CLIENT_CONN
+              valueFrom:
+                configMapKeyRef:
+                  name: pgbouncer-config
+                  key: MAX_CLIENT_CONN
+            - name: DEFAULT_POOL_SIZE
+              valueFrom:
+                configMapKeyRef:
+                  name: pgbouncer-config
+                  key: DEFAULT_POOL_SIZE
   {{- end }}

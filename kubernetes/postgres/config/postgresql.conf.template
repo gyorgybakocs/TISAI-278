@@ -4,14 +4,15 @@ listen_addresses = '*'
 port = 5432
 
 # ---------- CONNECTIONS ----------
-max_connections = 500
+max_connections = ${MAX_CONNECTIONS}
+max_prepared_transactions = ${MAX_PREPARED_TRANSACTIONS}
 superuser_reserved_connections = 3
 
 # ---------- MEMORY ----------
-shared_buffers = 8GB
-effective_cache_size = 24GB
-work_mem = 24MB
-maintenance_work_mem = 1GB
+shared_buffers = ${SHARED_BUFFERS}
+effective_cache_size = ${EFFECTIVE_CACHE_SIZE}
+work_mem = ${WORK_MEM}
+maintenance_work_mem = ${MAINTENANCE_WORK_MEM}
 
 # ---------- WAL / CHECKPOINT ----------
 wal_buffers = -1
@@ -23,9 +24,9 @@ random_page_cost = 1.2
 effective_io_concurrency = 64
 
 # ---------- PARALLEL ----------
-max_worker_processes = 16
-max_parallel_workers = 16
-max_parallel_workers_per_gather = 2
+max_worker_processes = ${MAX_WORKER_PROCESSES}
+max_parallel_workers = ${MAX_PARALLEL_WORKERS}
+max_parallel_workers_per_gather = 4
 
 # ---------- LOGGING ----------
 log_destination = 'stderr'

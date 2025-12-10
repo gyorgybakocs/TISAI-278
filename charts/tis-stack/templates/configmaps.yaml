@@ -27,6 +27,14 @@ data:
   POSTGRES_PORT: {{ .Values.postgres.service.port | quote }}
   POSTGRES_REDIRECT_PORT: {{ .Values.postgres.service.redirectPort | quote }}
   POSTGRES_VERSION: {{ .Values.global.versions.postgres | quote }}
+  MAX_CONNECTIONS: {{ .Values.postgres.config.max_connections | quote }}
+  MAX_PREPARED_TRANSACTIONS: {{ .Values.postgres.config.max_prepared_transactions | quote }}
+  SHARED_BUFFERS: {{ .Values.postgres.config.shared_buffers | quote }}
+  EFFECTIVE_CACHE_SIZE: {{ .Values.postgres.config.effective_cache_size | quote }}
+  WORK_MEM: {{ .Values.postgres.config.work_mem | quote }}
+  MAINTENANCE_WORK_MEM: {{ .Values.postgres.config.maintenance_work_mem | quote }}
+  MAX_WORKER_PROCESSES: {{ .Values.postgres.config.max_worker_processes | quote }}
+  MAX_PARALLEL_WORKERS: {{ .Values.postgres.config.max_parallel_workers | quote }}
   {{- end }}
 
 ---
@@ -60,6 +68,9 @@ data:
   PGBOUNCER_PORT: {{ .Values.pgbouncer.service.port | quote }}
   PGBOUNCER_REDIRECT_PORT: {{ .Values.pgbouncer.service.redirectPort | quote }}
   PGBOUNCER_VERSION: {{ .Values.global.versions.pgbouncer | quote }}
+  POOL_MODE: {{ .Values.pgbouncer.pool.mode | quote }}
+  MAX_CLIENT_CONN: {{ .Values.pgbouncer.pool.max_client_conn | quote }}
+  DEFAULT_POOL_SIZE: {{ .Values.pgbouncer.pool.default_pool_size | quote }}
   {{- end }}
 
 ---

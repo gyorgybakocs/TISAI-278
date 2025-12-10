@@ -58,6 +58,46 @@ spec:
                   key: postgres-password
             - name: PGDATA
               value: /var/lib/postgresql/data/pgdata
+            - name: MAX_CONNECTIONS
+              valueFrom:
+                configMapKeyRef:
+                  name: postgres-config
+                  key: MAX_CONNECTIONS
+            - name: MAX_PREPARED_TRANSACTIONS
+              valueFrom:
+                configMapKeyRef:
+                  name: postgres-config
+                  key: MAX_PREPARED_TRANSACTIONS
+            - name: SHARED_BUFFERS
+              valueFrom:
+                configMapKeyRef:
+                  name: postgres-config
+                  key: SHARED_BUFFERS
+            - name: EFFECTIVE_CACHE_SIZE
+              valueFrom:
+                configMapKeyRef:
+                  name: postgres-config
+                  key: EFFECTIVE_CACHE_SIZE
+            - name: WORK_MEM
+              valueFrom:
+                configMapKeyRef:
+                  name: postgres-config
+                  key: WORK_MEM
+            - name: MAINTENANCE_WORK_MEM
+              valueFrom:
+                configMapKeyRef:
+                  name: postgres-config
+                  key: MAINTENANCE_WORK_MEM
+            - name: MAX_WORKER_PROCESSES
+              valueFrom:
+                configMapKeyRef:
+                  name: postgres-config
+                  key: MAX_WORKER_PROCESSES
+            - name: MAX_PARALLEL_WORKERS
+              valueFrom:
+                configMapKeyRef:
+                  name: postgres-config
+                  key: MAX_PARALLEL_WORKERS
 
           volumeMounts:
             - name: postgres-data
